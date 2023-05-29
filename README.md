@@ -1,74 +1,55 @@
-# CCMpred
+# CCMpred implementaion on one TM protein (1aig chain L)
+<span style="color: red;">**Whta is CCMpred?**</span>
 
-[![Travis](https://img.shields.io/travis/soedinglab/CCMpred.svg)](https://travis-ci.org/soedinglab/CCMpred)
-[![Codeship](https://img.shields.io/codeship/c2512a40-d488-0132-75f3-623d5159f317.svg)](https://codeship.com/projects/77807)
+CCMpred (Conditional Coupling Model) is a bioinformatics tool used for predicting residue-residue contacts in protein sequences. It is based on the statistical analysis of large multiple sequence alignments (MSAs) and employs a machine learning approach to infer the likelihood of residue pairs being in contact based on their co-evolution patterns.
 
-Protein Residue-Residue **C**ontacts from **C**orrelated **M**utations **pred**icted quickly and accurately.
+CCMpred uses a probabilistic model to capture the co-evolutionary signals in the MSAs, which are indicative of residues that tend to co-occur in the three-dimensional (3D) structure of proteins.
 
-CCMpred is a C implementation of a Markov Random Field pseudo-likelihood maximization for learning protein residue-residue contacts as made popular by Ekeberg et al. [1] and Balakrishnan and Kamisetty [2]. While predicting contacts with comparable accuracy to the referenced methods, however, CCMpred is written in C / CUDA C, performance-tuned and therefore much faster.
+<span style="color: red;">**The input and output of CCMpred**</span>
+#### input: 
+- Multiple sequence alignment of the target protein or sequence (here 1aig) in .aln format
+#### the output:
+- An output file represent a matrix of shape L* L where L is the length of the query sequence (here 281 residues).
+- The output file contains **the predicted co-evolution scores for residue pairs** in a protein sequence.
+- The scores represent the predicted strength of co-evolution between each pair of residues.
+-  contacts between residues are typically defined based on a contact threshold applied to the predicted co-evolution scores.
+-  a common approach is to choose a contact threshold that corresponds to the top L predicted contacts, where L is typically determined based on the expected number of true contacts in the protein of interest.
+-  "L" refers to the number of top predicted contacts to consider. It is typically determined based on the expected number of true contacts in the protein of interest.
+-  For example, if the protein of interest is known to have approximately 100 true contacts, then L can be set to 100 to consider the top 100 predicted contacts. 
 
-## Requirements
 
-To compile from source, you will need:
+## Running Steps:
 
-  * a recent C compiler (we suggest GCC 4.4 or later)
-  * [CMake](http://cmake.org/) 2.8 or later
-  * Optional: [NVIDIA CUDA SDK](https://developer.nvidia.com/cuda-downloads) 5.0 or later (if you want to compile for the GPU)
-
-To run CUDA-accelerated computations, you will need an NVIDIA GPU with a Compute Capability of 2.0 or later and the proprietary NVIDIA drivers installed. See the [NVIDIA CUDA GPU Overview](https://developer.nvidia.com/cuda-gpus) for details on your graphics card.
-
-### Memory Requirement on the GPU
-When doing computations on the GPU, the available memory limits the size of the model you will be able to compute. We recommend at least 2 GB of GPU RAM so you can calculate contacts for big multiple sequence alignments (e.g for N=5000):
-
-	GPU RAM		Lmax	Lmax(pad)
-	1 GB		353	291
-	2 GB		512	420
-	3 GB		635	519
-	5 GB		829	676
-	6 GB		911	743
-	8 GB		1057	861
-	12 GB		1302	1059
-
-You can calculate the memory requirements in bytes for L columns and N rows using the following formula:
-
-	4*(4*(L*L*21*21 + L*20) + 23*N*L + N + L*L) + 2*N*L + 1024
-
-For the padded version:
-
-	4*(4*(L*L*32*21 + L*20) + 23*N*L + N + L*L) + 2*N*L + 1024
-
-## Installation
-We recommend compiling CCMpred on the machine that should run the computations so that it can be optimized for the appropriate CPU/GPU architecture.
-
-### Downloading
-If you want to compile the most recent version, use the follwing to clone both CCMpred and its submodules:
+### Installation
 
 	git clone --recursive https://github.com/soedinglab/CCMpred.git
 
 ### Compilation
-With the sourcecode ready, simply run cmake with the default settings and libraries should be auto-detected:
+- first, we need to change the CCMpred_my_implemenation/lib/libconjugrad/include/conjugrad.h file by adding `include <cmath>`
+- With the sourcecode ready, simply run cmake with the default settings and libraries should be auto-detected:
 
 	cmake .
 	make
 
 You should find the compiled version of CCMpred at `bin/ccmpred`. To check if the CUDA libraries were detected, you can run `ldd bin/ccmpred` to see if CUDA was linked with the program, or simply run a prediction and check the program's output.
+	
+### Creating a Multiple Sequence Alignment file Using HHblits
+- First we need to download a database to conduct the MSA search on. (here I use Uniclust30 from https://gwdu111.gwdg.de/~compbiol/uniclust/2022_02/)
+- Second, we use HHblits to create MSA so we can run CCmpred on those alignments to get the co-evolution scores
+- HHblits can be downloaded from (https://github.com/soedinglab/hh-suite)
+- we run the search using the following command:
+	`hhblits -i <input-file> -o <result-file> -n 1 -d <database-basename>`
+- where, i= input, -o output we should use -oa3m insted of -o to output a .a3m format, d=database
 
-## Useful scripts
+### Converting the .a3m format to .aln format
+- CCmpred accept MSA of .aln format, so we need to change the format of the a3m file to .aln 
+- we use the following code to do that
+	`egrep -v "^>" example.a3m | sed 's/[a-z]//g' | sort -u > example.aln`
 
-The `scripts/` subdirectory contains some python scripts you might find useful - please make sure both NumPy and BioPython are installed to use them!
 
-  * `convert_alignment.py` - Use BioPython's `Bio.SeqIO` to convert a variety of alignment formats (FASTA, etc.) into the CCMpred alignment input format
-  * `top_couplings.py` - Extract the top couplings from an output contact maps in a list representation
 
-## License
-CCMpred is released under the GNU Affero General Public License v3 or later. See LICENSE for more details.
+
 
 ## References
-
-	[1] Ekeberg, M., Lövkvist, C., Lan, Y., Weigt, M., & Aurell, E. (2013).
-	    Improved contact prediction in proteins: Using pseudolikelihoods to infer Potts models.
-	    Physical Review E, 87(1), 012707. doi:10.1103/PhysRevE.87.012707
-
-	[2] Balakrishnan, S., Kamisetty, H., Carbonell, J. G., Lee, S.-I., & Langmead, C. J. (2011).
-	    Learning generative models for protein fold families.
-	    Proteins, 79(4), 1061–78. doi:10.1002/prot.22934
+- The original implementation of CCMpred (https://github.com/soedinglab/CCMpred)
+- The original implementation of HHblits (https://github.com/soedinglab/hh-suite)
